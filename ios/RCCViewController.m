@@ -25,6 +25,7 @@ const NSInteger TRANSPARENT_NAVBAR_TAG = 78264803;
 @property (nonatomic) BOOL _disableBackGesture;
 @property (nonatomic, strong) NSDictionary *originalNavBarImages;
 @property (nonatomic, strong) UIImageView *navBarHairlineImageView;
+@property (nonatomic, weak) id <UIGestureRecognizerDelegate> originalInteractivePopGestureDelegate;
 @end
 
 @implementation RCCViewController
@@ -269,34 +270,21 @@ const NSInteger TRANSPARENT_NAVBAR_TAG = 78264803;
   }
   
   NSMutableDictionary *navButtonTextAttributes = [RCTHelpers textAttributesFromDictionary:self.navigatorStyle withPrefix:@"navBarButton"];
-  NSMutableDictionary *leftNavButtonTextAttributes = [RCTHelpers textAttributesFromDictionary:self.navigatorStyle withPrefix:@"navBarLeftButton"];
-  NSMutableDictionary *rightNavButtonTextAttributes = [RCTHelpers textAttributesFromDictionary:self.navigatorStyle withPrefix:@"navBarRightButton"];
   
-  if (
-    navButtonTextAttributes.allKeys.count > 0 ||
-    leftNavButtonTextAttributes.allKeys.count > 0 ||
-    rightNavButtonTextAttributes.allKeys.count > 0
-  ) {
+  if (navButtonTextAttributes.allKeys.count > 0) {
     
     for (UIBarButtonItem *item in viewController.navigationItem.leftBarButtonItems) {
       [item setTitleTextAttributes:navButtonTextAttributes forState:UIControlStateNormal];
-      
-      if (leftNavButtonTextAttributes.allKeys.count > 0) {
-        [item setTitleTextAttributes:leftNavButtonTextAttributes forState:UIControlStateNormal];
-      }
     }
     
     for (UIBarButtonItem *item in viewController.navigationItem.rightBarButtonItems) {
       [item setTitleTextAttributes:navButtonTextAttributes forState:UIControlStateNormal];
-      
-      if (rightNavButtonTextAttributes.allKeys.count > 0) {
-        [item setTitleTextAttributes:rightNavButtonTextAttributes forState:UIControlStateNormal];
-      }
     }
     
     // At the moment, this seems to be the only thing that gets the back button correctly
     [navButtonTextAttributes removeObjectForKey:NSForegroundColorAttributeName];
     [[UIBarButtonItem appearance] setTitleTextAttributes:navButtonTextAttributes forState:UIControlStateNormal];
+    //        [viewController.navigationItem.backBarButtonItem setTitleTextAttributes:navButtonTextAttributes forState:UIControlStateNormal];
   }
   
   NSString *navBarButtonColor = self.navigatorStyle[@"navBarButtonColor"];
@@ -482,6 +470,23 @@ const NSInteger TRANSPARENT_NAVBAR_TAG = 78264803;
   } else {
     self.navBarHairlineImageView.hidden = NO;
   }
+
+     
+  //Bug fix: in case there is a interactivePopGestureRecognizer, it prevents react-native from getting touch events on the left screen area that the gesture handles    
+  //overriding the delegate of the gesture prevents this from happening while keeping the gesture intact (another option was to disable it completely by demand)    
+   self.originalInteractivePopGestureDelegate = nil;   
+    if(self.navigationController.viewControllers.count > 1){  // <------ Added this check
+      if (self.navigationController != nil && self.navigationController.interactivePopGestureRecognizer != nil)
+      {
+        id <UIGestureRecognizerDelegate> interactivePopGestureRecognizer = self.navigationController.interactivePopGestureRecognizer.delegate;
+        if (interactivePopGestureRecognizer != nil)
+        {
+            self.originalInteractivePopGestureDelegate = interactivePopGestureRecognizer;
+            self.navigationController.interactivePopGestureRecognizer.delegate = self;
+        }
+      }
+    }
+
 }
 
 -(void)storeOriginalNavBarImages {
@@ -501,6 +506,12 @@ const NSInteger TRANSPARENT_NAVBAR_TAG = 78264803;
 
 -(void)setStyleOnDisappear {
   self.navBarHairlineImageView.hidden = NO;
+
+  if (self.navigationController != nil && self.navigationController.interactivePopGestureRecognizer != nil && self.originalInteractivePopGestureDelegate != nil)   
+    {   
+      self.navigationController.interactivePopGestureRecognizer.delegate = self.originalInteractivePopGestureDelegate;    
+      self.originalInteractivePopGestureDelegate = nil;   
+    }
 }
 
 // only styles that can't be set on willAppear should be set here
